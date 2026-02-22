@@ -55,6 +55,9 @@ CC_PROJECTS=chromium,mobile-chrome CC_RETRIES=1 npm run test:e2e:dashboard
 `scripts/test-launcher/server.mjs` starts a local UI that lists each `tests/specs/*.spec.ts` file and lets you execute one command per click:
 
 - Command buttons per test card: `Debug`, `Headed`, `Headless`, `Trace On`, `Repeat x3`
+- Per-test artifact actions: `View Latest Video`, `View Latest Trace`
+- Run history panel with timestamp/spec/command/status/duration
+- Toolbar actions: `Rerun Last Failed`, `Open History Report`, `Open Latest Report`
 - Supports project selector (`chromium` or `mobile-chrome`)
 - Streams command output in-app and exposes a stop button (`SIGINT`)
 

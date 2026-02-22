@@ -105,6 +105,30 @@
         border-color: transparent;
       }
 
+      .btn-report {
+        background: #244f8f;
+        color: white;
+        border-color: transparent;
+      }
+
+      .btn-video {
+        background: #3f6f3f;
+        color: white;
+        border-color: transparent;
+      }
+
+      .btn-rerun {
+        background: #8f6a24;
+        color: white;
+        border-color: transparent;
+      }
+
+      .btn-export {
+        background: #5b5b5b;
+        color: white;
+        border-color: transparent;
+      }
+
       .spec-list {
         display: grid;
         gap: 10px;
@@ -167,10 +191,99 @@
         font-size: 0.8rem;
       }
 
-      .actions {
+      .artifact-actions {
         margin-top: 10px;
         display: flex;
-        justify-content: flex-end;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+
+      .btn-artifact {
+        background: #f5efe1;
+        color: #2b2b2b;
+        border-color: var(--border);
+      }
+
+      .integrations {
+        margin-top: 10px;
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+
+      .integrations a {
+        color: #0d4a8c;
+        text-decoration: none;
+        font-size: 0.85rem;
+      }
+
+      .integrations a:hover {
+        text-decoration: underline;
+      }
+
+      .panel-right {
+        gap: 10px;
+      }
+
+      .history-block {
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 10px;
+        background: #fffdf8;
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
+        max-height: 34%;
+      }
+
+      .section-title {
+        font-size: 0.86rem;
+        font-weight: 700;
+        margin-bottom: 8px;
+      }
+
+      .history-list {
+        overflow: auto;
+        display: grid;
+        gap: 6px;
+        min-height: 0;
+      }
+
+      .history-row {
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 7px 8px;
+        background: #fffcf8;
+      }
+
+      .history-meta {
+        font-size: 0.75rem;
+        color: var(--muted);
+      }
+
+      .history-main {
+        font-family: "IBM Plex Mono", "SFMono-Regular", Menlo, monospace;
+        font-size: 0.74rem;
+        overflow-wrap: anywhere;
+      }
+
+      .status-chip {
+        font-weight: 700;
+      }
+
+      .status-chip.passed { color: #216d3a; }
+      .status-chip.failed { color: #a02c2c; }
+      .status-chip.running { color: #8a6a00; }
+
+      .log-block {
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 10px;
+        background: #fffdf8;
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
+        flex: 1;
       }
 
       pre {
@@ -214,15 +327,32 @@
           <div class="toolbar">
             <label for="projectSelect">Project</label>
             <select id="projectSelect"></select>
+            <button class="btn-rerun" id="rerunLastFailedBtn" type="button">Rerun Last Failed</button>
+            <button class="btn-export" id="exportHtmlBtn" type="button">Open History Report</button>
+            <button class="btn-video" id="videoBtn" type="button">View Latest Video</button>
+            <button class="btn-report" id="reportBtn" type="button">Open Latest Report</button>
             <button class="btn-stop" id="stopBtn" type="button">Stop all</button>
           </div>
 
           <div id="specList" class="spec-list"></div>
           <div class="hint">Click any command in a test card to run it for that single test.</div>
+          <div class="integrations">
+            <a href="https://allurereport.org/docs/playwright/" target="_blank" rel="noopener noreferrer">Allure</a>
+            <a href="https://reportportal.io/docs/log-data-in-reportportal/test-framework-integration/JavaScript/Playwright/" target="_blank" rel="noopener noreferrer">ReportPortal</a>
+            <a href="https://docs.currents.dev/" target="_blank" rel="noopener noreferrer">Currents</a>
+            <a href="https://argos-ci.com/playwright" target="_blank" rel="noopener noreferrer">Argos</a>
+          </div>
         </section>
 
-        <section class="panel">
-          <pre id="log"></pre>
+        <section class="panel panel-right">
+          <div class="history-block">
+            <div class="section-title">Run History</div>
+            <div id="historyList" class="history-list"></div>
+          </div>
+          <div class="log-block">
+            <div class="section-title">Live Log</div>
+            <pre id="log"></pre>
+          </div>
         </section>
       </div>
     </div>
@@ -230,13 +360,20 @@
     <script>
       const statusText = document.getElementById('statusText');
       const projectSelect = document.getElementById('projectSelect');
+      const rerunLastFailedBtn = document.getElementById('rerunLastFailedBtn');
+      const exportHtmlBtn = document.getElementById('exportHtmlBtn');
+      const videoBtn = document.getElementById('videoBtn');
+      const reportBtn = document.getElementById('reportBtn');
       const stopBtn = document.getElementById('stopBtn');
       const specList = document.getElementById('specList');
+      const historyList = document.getElementById('historyList');
       const logEl = document.getElementById('log');
 
       const state = {
         specs: [],
         presets: [],
+        history: [],
+        lastFailed: null,
         running: false,
         run: null
       };
@@ -259,7 +396,46 @@
         } else {
           statusText.textContent = 'Idle';
         }
+        setRerunButtonState();
         renderSpecCards();
+      }
+
+      function setHistory(data) {
+        state.history = data?.history || [];
+        state.lastFailed = data?.lastFailed || null;
+        setRerunButtonState();
+        renderHistory();
+      }
+
+      function setRerunButtonState() {
+        rerunLastFailedBtn.disabled = state.running || !state.lastFailed;
+      }
+
+      function formatDuration(ms) {
+        if (ms === null || ms === undefined) return '-';
+        if (ms < 1000) return `${ms}ms`;
+        return `${(ms / 1000).toFixed(2)}s`;
+      }
+
+      function renderHistory() {
+        historyList.innerHTML = '';
+        for (const item of state.history) {
+          const row = document.createElement('div');
+          row.className = 'history-row';
+          const started = new Date(item.startedAt).toLocaleTimeString();
+          row.innerHTML = `
+            <div class="history-meta">${started} | ${item.project} | ${item.presetTitle}</div>
+            <div class="history-main">${item.spec}</div>
+            <div class="history-meta">
+              <span class="status-chip ${item.status}">${item.status.toUpperCase()}</span>
+              | ${formatDuration(item.durationMs)}
+            </div>
+          `;
+          historyList.appendChild(row);
+        }
+        if (!state.history.length) {
+          historyList.innerHTML = '<div class="history-meta">No runs yet.</div>';
+        }
       }
 
       async function runSpec(spec, presetId) {
@@ -274,6 +450,21 @@
         if (!res.ok) {
           alert(data.error || 'Failed to run command.');
         }
+      }
+
+      async function openLatestArtifact(spec, type) {
+        const res = await fetch(`/api/artifact-status?spec=${encodeURIComponent(spec)}`);
+        const data = await res.json();
+        const available = data?.available?.[type];
+        if (!available) {
+          alert(`No ${type} found for this test yet. Run a matching command first.`);
+          return;
+        }
+        if (type === 'trace') {
+          window.open(`/trace/view?spec=${encodeURIComponent(spec)}`, '_blank', 'noopener,noreferrer');
+          return;
+        }
+        window.open(`/artifact/latest/${type}?spec=${encodeURIComponent(spec)}`, '_blank', 'noopener,noreferrer');
       }
 
       function renderPresetButton(spec, preset) {
@@ -301,6 +492,10 @@
           card.innerHTML = `
             <div class="spec-name">${spec}</div>
             <div class="preset-grid">${presetButtons}</div>
+            <div class="artifact-actions">
+              <button type="button" class="btn-artifact" data-open-video-spec="${spec}">View Latest Video</button>
+              <button type="button" class="btn-artifact" data-open-trace-spec="${spec}">View Latest Trace</button>
+            </div>
           `;
 
           specList.appendChild(card);
@@ -313,6 +508,20 @@
             runSpec(spec, presetId);
           });
         });
+
+        specList.querySelectorAll('button[data-open-video-spec]').forEach((btn) => {
+          btn.addEventListener('click', (e) => {
+            const spec = e.currentTarget.dataset.openVideoSpec;
+            openLatestArtifact(spec, 'video');
+          });
+        });
+
+        specList.querySelectorAll('button[data-open-trace-spec]').forEach((btn) => {
+          btn.addEventListener('click', (e) => {
+            const spec = e.currentTarget.dataset.openTraceSpec;
+            openLatestArtifact(spec, 'trace');
+          });
+        });
       }
 
       stopBtn.addEventListener('click', async () => {
@@ -323,18 +532,52 @@
         }
       });
 
+      rerunLastFailedBtn.addEventListener('click', async () => {
+        const res = await fetch('/api/rerun-last-failed', { method: 'POST' });
+        const data = await res.json();
+        if (!res.ok) {
+          alert(data.error || 'Could not rerun last failed command.');
+        }
+      });
+
+      exportHtmlBtn.addEventListener('click', () => {
+        window.open('/api/export/history.html', '_blank', 'noopener,noreferrer');
+      });
+
+      reportBtn.addEventListener('click', async () => {
+        const res = await fetch('/api/report-status');
+        const data = await res.json();
+        if (!data.available) {
+          alert('No HTML report found yet. Run Reporter HTML for a test first.');
+          return;
+        }
+        window.open('/report/', '_blank', 'noopener,noreferrer');
+      });
+
+      videoBtn.addEventListener('click', async () => {
+        const res = await fetch('/api/video-status');
+        const data = await res.json();
+        if (!data.available) {
+          alert('No video found yet. Run Video On for a test first.');
+          return;
+        }
+        window.open('/video/latest', '_blank', 'noopener,noreferrer');
+      });
+
       projectSelect.addEventListener('change', renderSpecCards);
 
       async function init() {
-        const [specsRes, statusRes, logsRes] = await Promise.all([
+        const [specsRes, statusRes, logsRes, historyRes] = await Promise.all([
           fetch('/api/specs'),
           fetch('/api/status'),
-          fetch('/api/logs')
+          fetch('/api/logs'),
+          fetch('/api/history')
         ]);
 
         const specsData = await specsRes.json();
         const statusData = await statusRes.json();
         const logsData = await logsRes.json();
+        const historyData = await historyRes.json();
 
         state.specs = specsData.specs || [];
         state.presets = specsData.presets || [];
@@ -349,6 +592,7 @@
         projectSelect.value = specsData.defaultProject || 'chromium';
 
         setStatus(statusData);
+        setHistory(historyData);
 
         for (const entry of logsData.logs || []) {
           appendLog(entry);
@@ -356,6 +600,7 @@
 
         const events = new EventSource('/api/stream');
         events.addEventListener('status', (ev) => setStatus(JSON.parse(ev.data)));
+        events.addEventListener('history', (ev) => setHistory(JSON.parse(ev.data)));
         events.addEventListener('log', (ev) => appendLog(JSON.parse(ev.data)));
       }
 

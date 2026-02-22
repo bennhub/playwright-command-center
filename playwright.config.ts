@@ -1,6 +1,9 @@
 import { defineConfig, devices } from '@playwright/test';
 import { BASE_URL, HEADLESS } from './config/env';
 
+type VideoMode = 'off' | 'on' | 'retain-on-failure' | 'on-first-retry';
+const VIDEO_MODE = (process.env.VIDEO as VideoMode | undefined) || 'retain-on-failure';
+
 export default defineConfig({
   testDir: './tests/specs',
   fullyParallel: true,
@@ -15,7 +18,7 @@ export default defineConfig({
     headless: HEADLESS,
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
-    video: 'retain-on-failure',
+    video: VIDEO_MODE,
     ignoreHTTPSErrors: true
   },
   projects: [
