@@ -9,7 +9,8 @@
     "test:e2e:headed": "playwright test --headed --project=chromium",
     "test:e2e:mobile": "playwright test --project=mobile-chrome",
     "test:e2e:report": "playwright show-report",
-    "test:e2e:dashboard": "node scripts/command-center.mjs"
+    "test:e2e:dashboard": "node scripts/command-center.mjs",
+    "test:e2e:launcher": "node scripts/test-launcher/server.mjs"
   },
   "keywords": [],
   "author": "Ben",

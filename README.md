@@ -30,6 +30,9 @@ npx playwright test
 # Live interactive test runner
 npx playwright test --ui
 
+# One-click debug launcher for single specs (opens browser + inspector)
+npm run test:e2e:launcher
+
 # Optional command-center dashboard (parallel grouped suites)
 npm run test:e2e:dashboard
 
@@ -46,6 +49,18 @@ npx playwright show-report
 ```bash
 # Optional overrides
 CC_PROJECTS=chromium,mobile-chrome CC_RETRIES=1 npm run test:e2e:dashboard
+```
+
+## Debug Launcher UI
+`scripts/test-launcher/server.mjs` starts a local UI that lists each `tests/specs/*.spec.ts` file and lets you execute one command per click:
+
+- Command buttons per test card: `Debug`, `Headed`, `Headless`, `Trace On`, `Repeat x3`
+- Supports project selector (`chromium` or `mobile-chrome`)
+- Streams command output in-app and exposes a stop button (`SIGINT`)
+
+```bash
+npm run test:e2e:launcher
+# Opens at http://127.0.0.1:4173
 ```
 
 ## Network Wait Strategy (Interview Notes)
