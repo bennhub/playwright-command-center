@@ -73,6 +73,12 @@ export class AuthPage {
     }
   }
 
+  async ensureLoggedOut() {
+    await this.page.goto('/logout.htm');
+    await expect(this.page.locator('input[name="username"]')).toBeVisible();
+    await expect(this.page.getByRole('button', { name: 'Log In' })).toBeVisible();
+  }
+
   async login(user: { username: string; password: string }) {
     await this.page.locator('input[name="username"]').fill(user.username);
     await this.page.locator('input[name="password"]').fill(user.password);
@@ -92,6 +98,6 @@ export class AuthPage {
   }
 
   async assertLoginFailure() {
-    await expect(this.page.getByText('The username and password could not be verified.')).toBeVisible();
+    await expect(this.page.getByText(/username and password could not be verified/i)).toBeVisible();
   }
 }

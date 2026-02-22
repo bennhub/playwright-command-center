@@ -129,6 +129,12 @@
         border-color: transparent;
       }
 
+      .btn-compact {
+        background: #4f4f78;
+        color: white;
+        border-color: transparent;
+      }
+
       .spec-list {
         display: grid;
         gap: 10px;
@@ -136,6 +142,53 @@
         min-height: 0;
         overflow: auto;
         padding-right: 4px;
+      }
+
+      .global-cart {
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        background: #fffdf8;
+        padding: 12px;
+        display: grid;
+        grid-template-columns: 1.3fr 1fr;
+        gap: 12px;
+        margin-bottom: 12px;
+      }
+
+      .global-list {
+        min-width: 0;
+      }
+
+      .global-list-tools {
+        display: flex;
+        gap: 8px;
+        margin-bottom: 8px;
+        flex-wrap: wrap;
+      }
+
+      .spec-checks {
+        max-height: 180px;
+        overflow: auto;
+        display: grid;
+        gap: 6px;
+        padding-right: 4px;
+      }
+
+      .spec-check {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        font-size: 0.82rem;
+      }
+
+      .global-actions {
+        min-width: 0;
+      }
+
+      .action-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 8px;
       }
 
       .spec-card {
@@ -149,6 +202,12 @@
         font-size: 0.86rem;
         margin-bottom: 10px;
         overflow-wrap: anywhere;
+      }
+
+      .spec-selected {
+        font-size: 0.75rem;
+        color: var(--muted);
+        margin-bottom: 8px;
       }
 
       .preset-grid {
@@ -308,9 +367,22 @@
         font-size: 0.85rem;
       }
 
+      body.compact .wrap { padding: 14px; }
+      body.compact .panel { padding: 10px; }
+      body.compact .preset-desc,
+      body.compact .integrations,
+      body.compact .hint { display: none; }
+      body.compact .history-block { max-height: 28%; }
+      body.compact .spec-card { padding: 8px; }
+      body.compact .toolbar { gap: 6px; }
+      body.compact select,
+      body.compact button { padding: 6px 8px; font-size: 0.86rem; }
+
       @media (max-width: 980px) {
         .layout { grid-template-columns: 1fr; }
         .preset-grid { grid-template-columns: 1fr; }
+        .global-cart { grid-template-columns: 1fr; }
+        .action-grid { grid-template-columns: 1fr; }
         .panel { height: auto; min-height: 45vh; }
       }
     </style>
@@ -329,13 +401,32 @@
             <select id="projectSelect"></select>
             <button class="btn-rerun" id="rerunLastFailedBtn" type="button">Rerun Last Failed</button>
             <button class="btn-export" id="exportHtmlBtn" type="button">Open History Report</button>
+            <button class="btn-compact" id="compactModeBtn" type="button">Compact Mode</button>
             <button class="btn-video" id="videoBtn" type="button">View Latest Video</button>
             <button class="btn-report" id="reportBtn" type="button">Open Latest Report</button>
             <button class="btn-stop" id="stopBtn" type="button">Stop all</button>
           </div>
 
+          <div class="global-cart">
+            <div class="global-list">
+              <div class="section-title">Global Spec Cart</div>
+              <div class="global-list-tools">
+                <button type="button" id="selectAllSpecsBtn">Select All</button>
+                <button type="button" id="deselectAllSpecsBtn">Deselect All</button>
+              </div>
+              <div id="globalSpecList" class="spec-checks"></div>
+            </div>
+            <div class="global-actions">
+              <div class="section-title">Execute On Selected</div>
+              <div class="global-list-tools">
+                <button type="button" class="btn-run" id="runSelectedSuiteBtn">Run Selected Suite + Report</button>
+              </div>
+              <div id="globalActionGrid" class="action-grid"></div>
+            </div>
+          </div>
+
           <div id="specList" class="spec-list"></div>
-          <div class="hint">Click any command in a test card to run it for that single test.</div>
+          <div class="hint">Use the Global Spec Cart above to run commands. Cards below are for artifact viewing.</div>
           <div class="integrations">
             <a href="https://allurereport.org/docs/playwright/" target="_blank" rel="noopener noreferrer">Allure</a>
             <a href="https://reportportal.io/docs/log-data-in-reportportal/test-framework-integration/JavaScript/Playwright/" target="_blank" rel="noopener noreferrer">ReportPortal</a>
@@ -357,256 +448,6 @@
       </div>
     </div>
 
-    <script>
-      const statusText = document.getElementById('statusText');
-      const projectSelect = document.getElementById('projectSelect');
-      const rerunLastFailedBtn = document.getElementById('rerunLastFailedBtn');
-      const exportHtmlBtn = document.getElementById('exportHtmlBtn');
-      const videoBtn = document.getElementById('videoBtn');
-      const reportBtn = document.getElementById('reportBtn');
-      const stopBtn = document.getElementById('stopBtn');
-      const specList = document.getElementById('specList');
-      const historyList = document.getElementById('historyList');
-      const logEl = document.getElementById('log');
-
-      const state = {
-        specs: [],
-        presets: [],
-        history: [],
-        lastFailed: null,
-        running: false,
-        run: null
-      };
-
-      function appendLog(entry) {
-        if (!entry || !entry.message) return;
-        const ts = new Date(entry.ts).toLocaleTimeString();
-        const line = `[${ts}] [${entry.level}] ${entry.message}`;
-        logEl.textContent += (logEl.textContent ? '\n' : '') + line;
-        logEl.scrollTop = logEl.scrollHeight;
-      }
-
-      function setStatus(status) {
-        state.running = status.running;
-        state.run = status.run;
-
-        if (status.running && status.run) {
-          const active = status.run.activePresetTitle ? ` - ${status.run.activePresetTitle}` : '';
-          statusText.textContent = `Running ${status.run.spec} (${status.run.project})${active}`;
-        } else {
-          statusText.textContent = 'Idle';
-        }
-        setRerunButtonState();
-        renderSpecCards();
-      }
-
-      function setHistory(data) {
-        state.history = data?.history || [];
-        state.lastFailed = data?.lastFailed || null;
-        setRerunButtonState();
-        renderHistory();
-      }
-
-      function setRerunButtonState() {
-        rerunLastFailedBtn.disabled = state.running || !state.lastFailed;
-      }
-
-      function formatDuration(ms) {
-        if (ms === null || ms === undefined) return '-';
-        if (ms < 1000) return `${ms}ms`;
-        return `${(ms / 1000).toFixed(2)}s`;
-      }
-
-      function renderHistory() {
-        historyList.innerHTML = '';
-        for (const item of state.history) {
-          const row = document.createElement('div');
-          row.className = 'history-row';
-          const started = new Date(item.startedAt).toLocaleTimeString();
-          row.innerHTML = `
-            <div class="history-meta">${started} | ${item.project} | ${item.presetTitle}</div>
-            <div class="history-main">${item.spec}</div>
-            <div class="history-meta">
-              <span class="status-chip ${item.status}">${item.status.toUpperCase()}</span>
-              | ${formatDuration(item.durationMs)}
-            </div>
-          `;
-          historyList.appendChild(row);
-        }
-        if (!state.history.length) {
-          historyList.innerHTML = '<div class="history-meta">No runs yet.</div>';
-        }
-      }
-
-      async function runSpec(spec, presetId) {
-        const project = projectSelect.value || 'chromium';
-
-        const res = await fetch('/api/run', {
-          method: 'POST',
-          headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ spec, project, presets: [presetId] })
-        });
-        const data = await res.json();
-        if (!res.ok) {
-          alert(data.error || 'Failed to run command.');
-        }
-      }
-
-      async function openLatestArtifact(spec, type) {
-        const res = await fetch(`/api/artifact-status?spec=${encodeURIComponent(spec)}`);
-        const data = await res.json();
-        const available = data?.available?.[type];
-        if (!available) {
-          alert(`No ${type} found for this test yet. Run a matching command first.`);
-          return;
-        }
-        if (type === 'trace') {
-          window.open(`/trace/view?spec=${encodeURIComponent(spec)}`, '_blank', 'noopener,noreferrer');
-          return;
-        }
-        window.open(`/artifact/latest/${type}?spec=${encodeURIComponent(spec)}`, '_blank', 'noopener,noreferrer');
-      }
-
-      function renderPresetButton(spec, preset) {
-        return `
-          <div class="preset">
-            <button type="button" class="preset-btn" data-run-spec="${spec}" data-preset-id="${preset.id}" ${state.running ? 'disabled' : ''}>
-              <span>
-                <div class="preset-title">${preset.title}</div>
-                <div class="preset-desc">${preset.description}</div>
-              </span>
-            </button>
-          </div>
-        `;
-      }
-
-      function renderSpecCards() {
-        specList.innerHTML = '';
-
-        for (const spec of state.specs) {
-          const card = document.createElement('div');
-          card.className = 'spec-card';
-
-          const presetButtons = state.presets.map((preset) => renderPresetButton(spec, preset)).join('');
-
-          card.innerHTML = `
-            <div class="spec-name">${spec}</div>
-            <div class="preset-grid">${presetButtons}</div>
-            <div class="artifact-actions">
-              <button type="button" class="btn-artifact" data-open-video-spec="${spec}">View Latest Video</button>
-              <button type="button" class="btn-artifact" data-open-trace-spec="${spec}">View Latest Trace</button>
-            </div>
-          `;
-
-          specList.appendChild(card);
-        }
-
-        specList.querySelectorAll('button[data-run-spec][data-preset-id]').forEach((btn) => {
-          btn.addEventListener('click', (e) => {
-            const spec = e.currentTarget.dataset.runSpec;
-            const presetId = e.currentTarget.dataset.presetId;
-            runSpec(spec, presetId);
-          });
-        });
-
-        specList.querySelectorAll('button[data-open-video-spec]').forEach((btn) => {
-          btn.addEventListener('click', (e) => {
-            const spec = e.currentTarget.dataset.openVideoSpec;
-            openLatestArtifact(spec, 'video');
-          });
-        });
-
-        specList.querySelectorAll('button[data-open-trace-spec]').forEach((btn) => {
-          btn.addEventListener('click', (e) => {
-            const spec = e.currentTarget.dataset.openTraceSpec;
-            openLatestArtifact(spec, 'trace');
-          });
-        });
-      }
-
-      stopBtn.addEventListener('click', async () => {
-        const res = await fetch('/api/stop', { method: 'POST' });
-        const data = await res.json();
-        if (!res.ok) {
-          alert(data.error || 'Nothing to stop.');
-        }
-      });
-
-      rerunLastFailedBtn.addEventListener('click', async () => {
-        const res = await fetch('/api/rerun-last-failed', { method: 'POST' });
-        const data = await res.json();
-        if (!res.ok) {
-          alert(data.error || 'Could not rerun last failed command.');
-        }
-      });
-
-      exportHtmlBtn.addEventListener('click', () => {
-        window.open('/api/export/history.html', '_blank', 'noopener,noreferrer');
-      });
-
-      reportBtn.addEventListener('click', async () => {
-        const res = await fetch('/api/report-status');
-        const data = await res.json();
-        if (!data.available) {
-          alert('No HTML report found yet. Run Reporter HTML for a test first.');
-          return;
-        }
-        window.open('/report/', '_blank', 'noopener,noreferrer');
-      });
-
-      videoBtn.addEventListener('click', async () => {
-        const res = await fetch('/api/video-status');
-        const data = await res.json();
-        if (!data.available) {
-          alert('No video found yet. Run Video On for a test first.');
-          return;
-        }
-        window.open('/video/latest', '_blank', 'noopener,noreferrer');
-      });
-
-      projectSelect.addEventListener('change', renderSpecCards);
-
-      async function init() {
-        const [specsRes, statusRes, logsRes, historyRes] = await Promise.all([
-          fetch('/api/specs'),
-          fetch('/api/status'),
-          fetch('/api/logs'),
-          fetch('/api/history')
-        ]);
-
-        const specsData = await specsRes.json();
-        const statusData = await statusRes.json();
-        const logsData = await logsRes.json();
-        const historyData = await historyRes.json();
-
-        state.specs = specsData.specs || [];
-        state.presets = specsData.presets || [];
-
-        projectSelect.innerHTML = '';
-        for (const project of specsData.projects || []) {
-          const option = document.createElement('option');
-          option.value = project;
-          option.textContent = project;
-          projectSelect.appendChild(option);
-        }
-        projectSelect.value = specsData.defaultProject || 'chromium';
-
-        setStatus(statusData);
-        setHistory(historyData);
-
-        for (const entry of logsData.logs || []) {
-          appendLog(entry);
-        }
-
-        const events = new EventSource('/api/stream');
-        events.addEventListener('status', (ev) => setStatus(JSON.parse(ev.data)));
-        events.addEventListener('history', (ev) => setHistory(JSON.parse(ev.data)));
-        events.addEventListener('log', (ev) => appendLog(JSON.parse(ev.data)));
-      }
-
-      init().catch((err) => {
-        statusText.textContent = `Error: ${err.message}`;
-      });
-    </script>
+    <script type="module" src="/app.js"></script>
   </body>
 </html>

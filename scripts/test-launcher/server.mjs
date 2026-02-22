@@ -70,6 +70,7 @@ const COMMAND_PRESETS = [
 const rootDir = process.cwd();
 const specsDir = path.join(rootDir, 'tests', 'specs');
 const staticIndex = path.join(rootDir, 'scripts', 'test-launcher', 'index.html');
+const staticAppJs = path.join(rootDir, 'scripts', 'test-launcher', 'app.js');
 const reportDir = path.join(rootDir, 'playwright-report');
 const testResultsDir = path.join(rootDir, 'test-results');
 
@@ -480,6 +481,95 @@ async function startRun(spec, project, presetIds) {
   return { ok: true, queued: selectedPresets.length, runInProgress };
 }
 
+async function startSuiteRun(specs, project) {
+  if (currentRun) {
+    return { ok: false, error: 'A test is already running. Stop it or wait for completion.' };
+  }
+
+  const args = ['playwright', 'test', ...specs, '--project', project];
+  const printableCommand = `npx ${args.join(' ')}`;
+  const runStartedAt = new Date().toISOString();
+  const historyId = nextHistoryId++;
+
+  const child = spawn('npx', args, {
+    cwd: rootDir,
+    env: process.env,
+    stdio: ['ignore', 'pipe', 'pipe'],
+    shell: false
+  });
+
+  currentRun = {
+    spec: `${specs.length} selected specs`,
+    project,
+    presetIds: ['suite'],
+    activePresetTitle: 'Selected Suite',
+    activeCommand: printableCommand,
+    startedAt: runStartedAt,
+    child,
+    stop: () => {
+      child.kill('SIGINT');
+    }
+  };
+
+  addHistoryEntry({
+    id: historyId,
+    spec: `${specs.length} selected specs`,
+    project,
+    presetId: 'suite',
+    presetTitle: 'Selected Suite',
+    command: printableCommand,
+    startedAt: runStartedAt,
+    endedAt: null,
+    durationMs: null,
+    status: 'running',
+    exitCode: null,
+    signal: null
+  });
+
+  appendLog('info', `[Selected Suite] $ ${printableCommand}`);
+  sendEvent('status', getStatus());
+
+  child.stdout.on('data', (chunk) => {
+    const text = String(chunk);
+    if (text.trim()) appendLog('stdout', text.trimEnd());
+  });
+  child.stderr.on('data', (chunk) => {
+    const text = String(chunk);
+    if (text.trim()) appendLog('stderr', text.trimEnd());
+  });
+
+  child.on('close', (code, signal) => {
+    const exitText = signal ? `terminated by ${signal}` : `exited ${code}`;
+    appendLog(code === 0 ? 'info' : 'error', `[Selected Suite] Run finished: ${exitText}`);
+    const endedAt = new Date().toISOString();
+    updateHistoryEntry(historyId, {
+      endedAt,
+      durationMs: Date.parse(endedAt) - Date.parse(runStartedAt),
+      status: code === 0 ? 'passed' : 'failed',
+      exitCode: code ?? 1,
+      signal: signal ?? null
+    });
+    currentRun = null;
+    sendEvent('status', getStatus());
+  });
+
+  child.on('error', (err) => {
+    appendLog('error', `[Selected Suite] Failed to start: ${err.message}`);
+    const endedAt = new Date().toISOString();
+    updateHistoryEntry(historyId, {
+      endedAt,
+      durationMs: Date.parse(endedAt) - Date.parse(runStartedAt),
+      status: 'failed',
+      exitCode: 1,
+      signal: null
+    });
+    currentRun = null;
+    sendEvent('status', getStatus());
+  });
+
+  return { ok: true, queued: specs.length, mode: 'suite' };
+}
+
 function stopRun() {
   if (!currentRun) return { ok: false, error: 'No running test to stop.' };
   currentRun.stop();
@@ -495,6 +585,13 @@ const server = createServer(async (req, res) => {
       const html = await readFile(staticIndex, 'utf8');
       res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
       res.end(html);
+      return;
+    }
+
+    if (req.method === 'GET' && url.pathname === '/app.js') {
+      const js = await readFile(staticAppJs, 'utf8');
+      res.writeHead(200, { 'content-type': 'application/javascript; charset=utf-8' });
+      res.end(js);
       return;
     }
 
@@ -590,6 +687,33 @@ const server = createServer(async (req, res) => {
       }
 
       const result = await startRun(spec, project, presets);
+      sendJson(res, result.ok ? 200 : 409, result);
+      return;
+    }
+
+    if (req.method === 'POST' && url.pathname === '/api/run-suite') {
+      const chunks = [];
+      for await (const chunk of req) chunks.push(chunk);
+      const body = JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}');
+      const project = String(body.project || 'chromium');
+      const specs = Array.isArray(body.specs) ? body.specs.map(String) : [];
+
+      if (!PROJECTS.includes(project)) {
+        sendJson(res, 400, { ok: false, error: 'Invalid project.' });
+        return;
+      }
+
+      const validSpecs = await listSpecs();
+      if (!specs.length) {
+        sendJson(res, 400, { ok: false, error: 'Select at least one spec.' });
+        return;
+      }
+      if (specs.some((spec) => !validSpecs.includes(spec))) {
+        sendJson(res, 400, { ok: false, error: 'Invalid spec selection.' });
+        return;
+      }
+
+      const result = await startSuiteRun(specs, project);
       sendJson(res, result.ok ? 200 : 409, result);
       return;
     }
