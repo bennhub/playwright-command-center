@@ -1,12 +1,21 @@
 const dom = {
+  menuBtn: document.getElementById('menuBtn'),
+  menuDrawer: document.getElementById('menuDrawer'),
+  aboutMenuItem: document.getElementById('aboutMenuItem'),
+  readmeMenuItem: document.getElementById('readmeMenuItem'),
+  aboutModal: document.getElementById('aboutModal'),
+  closeAboutBtn: document.getElementById('closeAboutBtn'),
+  readmeModal: document.getElementById('readmeModal'),
+  readmeCodeWindow: document.getElementById('readmeCodeWindow'),
+  closeReadmeBtn: document.getElementById('closeReadmeBtn'),
   statusText: document.getElementById('statusText'),
   projectSelect: document.getElementById('projectSelect'),
   rerunLastFailedBtn: document.getElementById('rerunLastFailedBtn'),
   exportHtmlBtn: document.getElementById('exportHtmlBtn'),
-  compactModeBtn: document.getElementById('compactModeBtn'),
   selectAllSpecsBtn: document.getElementById('selectAllSpecsBtn'),
   deselectAllSpecsBtn: document.getElementById('deselectAllSpecsBtn'),
   runSelectedSuiteBtn: document.getElementById('runSelectedSuiteBtn'),
+  specSyncBadge: document.getElementById('specSyncBadge'),
   globalSpecList: document.getElementById('globalSpecList'),
   globalActionGrid: document.getElementById('globalActionGrid'),
   videoBtn: document.getElementById('videoBtn'),
@@ -25,9 +34,48 @@ const state = {
   batchRunning: false,
   running: false,
   run: null,
-  compactMode: false,
+  pendingSpecsUpdate: null,
+  pollTimer: null,
   selectedSpecs: new Set()
 };
+
+const README_FALLBACK = `# Parabank Automation Showcase
+
+## What This App Is
+Ben's Playwright Command Runner + Debugger for interview demos and fast troubleshooting.
+
+## Mission
+- Reduce CLI friction for running tests
+- Make failures easy to inspect (trace/video/report)
+- Provide a clear demo workflow for automation interviews
+
+## Install
+\`\`\`bash
+npm ci
+npx playwright install chromium
+\`\`\`
+
+## Run Launcher
+\`\`\`bash
+npm run test:e2e:launcher
+\`\`\`
+
+Open: http://127.0.0.1:4173
+
+## Typical Workflow
+1. Pick Target (Browser/Device)
+2. Select specs in Global Spec Cart
+3. Run command preset or Run Selected Suite + Report
+4. Inspect View Latest Trace / View Latest Video
+5. Open Latest Report for summary
+
+## Key Features
+- Global actions: rerun failed, history report, latest report/video, stop all
+- Global spec selection with batch command execution
+- Suite run mode for consolidated HTML report
+- Per-test artifact viewing
+- Dynamic spec auto-refresh when test files are added/removed
+- Run history timeline`;
 
 const api = {
   async get(path) {
@@ -51,13 +99,6 @@ const api = {
 
 function isBusy() {
   return state.running || state.batchRunning;
-}
-
-function setCompactMode(enabled) {
-  state.compactMode = Boolean(enabled);
-  document.body.classList.toggle('compact', state.compactMode);
-  dom.compactModeBtn.textContent = state.compactMode ? 'Expanded Mode' : 'Compact Mode';
-  localStorage.setItem('launcher.compactMode', state.compactMode ? '1' : '0');
 }
 
 function formatDuration(ms) {
@@ -90,8 +131,40 @@ function setStatus(status) {
   }
 
   setRerunButtonState();
+  flushPendingSpecsUpdateIfIdle();
   renderGlobalSpecCart();
   renderSpecCards();
+}
+
+function areSameStringArrays(a, b) {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    if (a[i] !== b[i]) return false;
+  }
+  return true;
+}
+
+function setSpecSyncBadge(text = '') {
+  if (!dom.specSyncBadge) return;
+  dom.specSyncBadge.textContent = text;
+}
+
+function applySpecsUpdate(nextSpecs) {
+  const prevSelected = new Set(state.selectedSpecs);
+  state.specs = nextSpecs;
+  state.selectedSpecs = new Set([...prevSelected].filter((spec) => state.specs.includes(spec)));
+  renderGlobalSpecCart();
+  renderSpecCards();
+}
+
+function flushPendingSpecsUpdateIfIdle() {
+  if (isBusy() || !state.pendingSpecsUpdate) return;
+  applySpecsUpdate(state.pendingSpecsUpdate.specs);
+  state.pendingSpecsUpdate = null;
+  setSpecSyncBadge('Updated');
+  setTimeout(() => {
+    setSpecSyncBadge('');
+  }, 3000);
 }
 
 function setHistory(data) {
@@ -180,7 +253,7 @@ function renderSpecCards() {
       <div class="spec-name">${spec}</div>
       <div class="spec-selected">${selected}</div>
       <div class="artifact-actions">
-        <button type="button" class="btn-artifact" data-open-video-spec="${spec}">View Latest Video</button>
+        <button type="button" class="btn-artifact" data-open-video-spec="${spec}">View Latest Video (This Test)</button>
         <button type="button" class="btn-artifact" data-open-trace-spec="${spec}">View Latest Trace</button>
       </div>
     `;
@@ -319,10 +392,6 @@ function bindToolbarActions() {
     window.open('/api/export/history.html', '_blank', 'noopener,noreferrer');
   });
 
-  dom.compactModeBtn.addEventListener('click', () => {
-    setCompactMode(!state.compactMode);
-  });
-
   dom.reportBtn.addEventListener('click', async () => {
     try {
       const data = await api.get('/api/report-status');
@@ -355,6 +424,85 @@ function bindToolbarActions() {
   });
 }
 
+function closeMenu() {
+  dom.menuDrawer.classList.remove('open');
+}
+
+function openAboutModal() {
+  dom.aboutModal.classList.add('open');
+}
+
+function closeAboutModal() {
+  dom.aboutModal.classList.remove('open');
+}
+
+function openReadmeModal() {
+  dom.readmeModal.classList.add('open');
+}
+
+function closeReadmeModal() {
+  dom.readmeModal.classList.remove('open');
+}
+
+function bindMenuActions() {
+  dom.menuBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    dom.menuDrawer.classList.toggle('open');
+  });
+
+  dom.aboutMenuItem.addEventListener('click', () => {
+    closeMenu();
+    openAboutModal();
+  });
+
+  dom.readmeMenuItem.addEventListener('click', () => {
+    closeMenu();
+    openReadmeModal();
+    dom.readmeCodeWindow.textContent = 'Loading README...';
+    fetch('/repo-readme')
+      .then((res) => {
+        if (!res.ok) throw new Error('Could not load repository README.');
+        return res.text();
+      })
+      .then((text) => {
+        dom.readmeCodeWindow.textContent = text || README_FALLBACK;
+      })
+      .catch(() => {
+        dom.readmeCodeWindow.textContent = README_FALLBACK;
+      });
+  });
+
+  dom.closeAboutBtn.addEventListener('click', () => {
+    closeAboutModal();
+  });
+
+  dom.aboutModal.addEventListener('click', (e) => {
+    if (e.target === dom.aboutModal) closeAboutModal();
+  });
+
+  dom.closeReadmeBtn.addEventListener('click', () => {
+    closeReadmeModal();
+  });
+
+  dom.readmeModal.addEventListener('click', (e) => {
+    if (e.target === dom.readmeModal) closeReadmeModal();
+  });
+
+  document.addEventListener('click', (e) => {
+    if (!dom.menuDrawer.contains(e.target) && e.target !== dom.menuBtn) {
+      closeMenu();
+    }
+  });
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      closeMenu();
+      closeAboutModal();
+      closeReadmeModal();
+    }
+  });
+}
+
 function bindRealtimeEvents() {
   const events = new EventSource('/api/stream');
   events.addEventListener('status', (ev) => setStatus(JSON.parse(ev.data)));
@@ -362,9 +510,29 @@ function bindRealtimeEvents() {
   events.addEventListener('log', (ev) => appendLog(JSON.parse(ev.data)));
 }
 
-async function init() {
-  setCompactMode(localStorage.getItem('launcher.compactMode') === '1');
+async function pollSpecs() {
+  try {
+    const specsData = await api.get('/api/specs');
+    const nextSpecs = specsData.specs || [];
+    if (areSameStringArrays(state.specs, nextSpecs)) return;
 
+    if (isBusy()) {
+      state.pendingSpecsUpdate = { specs: nextSpecs };
+      setSpecSyncBadge('Update queued');
+      return;
+    }
+
+    applySpecsUpdate(nextSpecs);
+    setSpecSyncBadge('Updated');
+    setTimeout(() => {
+      setSpecSyncBadge('');
+    }, 3000);
+  } catch {
+    // Silent by design; polling should not disrupt demos/runs.
+  }
+}
+
+async function init() {
   const [specsData, statusData, logsData, historyData] = await Promise.all([
     api.get('/api/specs'),
     api.get('/api/status'),
@@ -384,16 +552,19 @@ async function init() {
   }
   dom.projectSelect.value = specsData.defaultProject || 'chromium';
 
-  // Initial default: all specs selected. Deselect All remains respected afterward.
-  for (const spec of state.specs) state.selectedSpecs.add(spec);
-
   setStatus(statusData);
   setHistory(historyData);
 
   for (const entry of logsData.logs || []) appendLog(entry);
 
   bindToolbarActions();
+  bindMenuActions();
   bindRealtimeEvents();
+
+  // Watch for added/removed spec files and refresh lists without page reload.
+  state.pollTimer = setInterval(() => {
+    pollSpecs();
+  }, 8000);
 }
 
 init().catch((err) => {

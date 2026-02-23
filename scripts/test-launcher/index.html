@@ -42,6 +42,50 @@
         margin-bottom: 16px;
       }
 
+      .title-group {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .menu-btn {
+        width: 34px;
+        height: 34px;
+        border-radius: 8px;
+        border: 1px solid var(--border);
+        background: #fffdf8;
+        font-size: 1rem;
+        line-height: 1;
+      }
+
+      .menu-drawer {
+        position: absolute;
+        top: 56px;
+        left: 16px;
+        z-index: 30;
+        background: #fffdf8;
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        box-shadow: 0 10px 24px rgba(0, 0, 0, 0.12);
+        padding: 8px;
+        min-width: 170px;
+        display: none;
+      }
+
+      .menu-drawer.open { display: block; }
+
+      .menu-item {
+        display: block;
+        width: 100%;
+        text-align: left;
+        background: transparent;
+        border: 0;
+        border-radius: 8px;
+        padding: 8px;
+      }
+
+      .menu-item:hover { background: #f1ebde; }
+
       h1 {
         margin: 0;
         font-size: 1.6rem;
@@ -71,12 +115,31 @@
         flex-direction: column;
       }
 
+      .panel-left {
+        height: calc(100vh - 40px);
+        overflow: hidden;
+      }
+
       .toolbar {
         display: flex;
         gap: 10px;
         align-items: center;
         margin-bottom: 12px;
         flex-wrap: wrap;
+      }
+
+      .global-toolbar {
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        background: #fffdf8;
+        padding: 10px;
+        margin-bottom: 10px;
+      }
+
+      .global-toolbar-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 8px;
       }
 
       select, button {
@@ -129,11 +192,6 @@
         border-color: transparent;
       }
 
-      .btn-compact {
-        background: #4f4f78;
-        color: white;
-        border-color: transparent;
-      }
 
       .spec-list {
         display: grid;
@@ -301,6 +359,13 @@
         margin-bottom: 8px;
       }
 
+      .sync-badge {
+        font-size: 0.72rem;
+        color: #6e6556;
+        margin-left: 8px;
+        font-weight: 500;
+      }
+
       .history-list {
         overflow: auto;
         display: grid;
@@ -367,20 +432,71 @@
         font-size: 0.85rem;
       }
 
-      body.compact .wrap { padding: 14px; }
-      body.compact .panel { padding: 10px; }
-      body.compact .preset-desc,
-      body.compact .integrations,
-      body.compact .hint { display: none; }
-      body.compact .history-block { max-height: 28%; }
-      body.compact .spec-card { padding: 8px; }
-      body.compact .toolbar { gap: 6px; }
-      body.compact select,
-      body.compact button { padding: 6px 8px; font-size: 0.86rem; }
+      .modal-backdrop {
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.35);
+        display: none;
+        align-items: center;
+        justify-content: center;
+        z-index: 50;
+      }
+
+      .modal-backdrop.open { display: flex; }
+
+      .modal {
+        width: min(760px, 92vw);
+        max-height: 82vh;
+        overflow: auto;
+        background: #fffdf8;
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 14px;
+      }
+
+      .modal-title {
+        font-size: 1.05rem;
+        font-weight: 700;
+        margin-bottom: 8px;
+      }
+
+      .modal-actions {
+        display: flex;
+        justify-content: flex-end;
+        margin-top: 12px;
+      }
+
+      .code-window {
+        margin-top: 8px;
+        background: #191919;
+        color: #e8e8e8;
+        border-radius: 10px;
+        border: 1px solid #2d2d2d;
+        padding: 10px;
+        max-height: 62vh;
+        overflow: auto;
+        font-family: "IBM Plex Mono", "SFMono-Regular", Menlo, monospace;
+        font-size: 0.78rem;
+        line-height: 1.45;
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+      }
+
+      .wrap { padding: 14px; }
+      .panel { padding: 10px; }
+      .preset-desc,
+      .integrations,
+      .hint { display: none; }
+      .history-block { max-height: 28%; }
+      .spec-card { padding: 8px; }
+      .toolbar { gap: 6px; }
+      select,
+      button { padding: 6px 8px; font-size: 0.86rem; }
 
       @media (max-width: 980px) {
         .layout { grid-template-columns: 1fr; }
         .preset-grid { grid-template-columns: 1fr; }
+        .global-toolbar-grid { grid-template-columns: 1fr; }
         .global-cart { grid-template-columns: 1fr; }
         .action-grid { grid-template-columns: 1fr; }
         .panel { height: auto; min-height: 45vh; }
@@ -390,26 +506,39 @@
   <body>
     <div class="wrap">
       <div class="header">
-        <h1>Playwright Debug Launcher</h1>
+        <div class="title-group">
+          <button class="menu-btn" id="menuBtn" type="button" aria-label="Open menu">☰</button>
+          <h1>Ben's Playwright Command Runner + Debugger</h1>
+        </div>
         <div class="status" id="statusText">Loading...</div>
       </div>
 
+      <div class="menu-drawer" id="menuDrawer">
+        <button type="button" class="menu-item" id="aboutMenuItem">About This App</button>
+        <button type="button" class="menu-item" id="readmeMenuItem">Readme</button>
+      </div>
+
       <div class="layout">
-        <section class="panel">
+        <section class="panel panel-left">
+          <div class="global-toolbar">
+            <div class="section-title">Global Actions</div>
+            <div class="global-toolbar-grid">
+              <button class="btn-rerun" id="rerunLastFailedBtn" type="button">Rerun Last Failed</button>
+              <button class="btn-export" id="exportHtmlBtn" type="button">Open History Report</button>
+              <button class="btn-video" id="videoBtn" type="button">View Latest Video (Global)</button>
+              <button class="btn-report" id="reportBtn" type="button">Open Latest Report</button>
+              <button class="btn-stop" id="stopBtn" type="button">Stop all</button>
+            </div>
+          </div>
+
           <div class="toolbar">
-            <label for="projectSelect">Project</label>
+            <label for="projectSelect">Target (Browser/Device)</label>
             <select id="projectSelect"></select>
-            <button class="btn-rerun" id="rerunLastFailedBtn" type="button">Rerun Last Failed</button>
-            <button class="btn-export" id="exportHtmlBtn" type="button">Open History Report</button>
-            <button class="btn-compact" id="compactModeBtn" type="button">Compact Mode</button>
-            <button class="btn-video" id="videoBtn" type="button">View Latest Video</button>
-            <button class="btn-report" id="reportBtn" type="button">Open Latest Report</button>
-            <button class="btn-stop" id="stopBtn" type="button">Stop all</button>
           </div>
 
           <div class="global-cart">
             <div class="global-list">
-              <div class="section-title">Global Spec Cart</div>
+              <div class="section-title">Global Spec Cart <span class="sync-badge" id="specSyncBadge"></span></div>
               <div class="global-list-tools">
                 <button type="button" id="selectAllSpecsBtn">Select All</button>
                 <button type="button" id="deselectAllSpecsBtn">Deselect All</button>
@@ -425,6 +554,7 @@
             </div>
           </div>
 
+          <div class="section-title">Spec List (Artifacts)</div>
           <div id="specList" class="spec-list"></div>
           <div class="hint">Use the Global Spec Cart above to run commands. Cards below are for artifact viewing.</div>
           <div class="integrations">
@@ -445,6 +575,37 @@
             <pre id="log"></pre>
           </div>
         </section>
+      </div>
+    </div>
+
+    <div class="modal-backdrop" id="aboutModal">
+      <div class="modal">
+        <div class="modal-title">About This App</div>
+        <div>
+          This tool is a Playwright command runner designed for interview demos and daily debugging.
+          It lets you select specs, run commands in one click, inspect traces/videos, and review run history.
+        </div>
+        <div style="margin-top:8px;">Main workflow:</div>
+        <ul style="margin:6px 0 0 18px; padding:0;">
+          <li>Choose target browser/device.</li>
+          <li>Select specs in Global Spec Cart.</li>
+          <li>Run a command preset or run selected suite for one consolidated report.</li>
+          <li>Use per-test artifact buttons to inspect latest video/trace.</li>
+          <li>Spec list updates automatically when test files are added/removed (applies safely when idle).</li>
+        </ul>
+        <div class="modal-actions">
+          <button type="button" id="closeAboutBtn">Close</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal-backdrop" id="readmeModal">
+      <div class="modal">
+        <div class="modal-title">Repository README</div>
+        <div class="code-window" id="readmeCodeWindow">Loading README...</div>
+        <div class="modal-actions">
+          <button type="button" id="closeReadmeBtn">Close</button>
+        </div>
       </div>
     </div>
 

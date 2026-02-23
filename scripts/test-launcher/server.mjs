@@ -71,6 +71,8 @@ const rootDir = process.cwd();
 const specsDir = path.join(rootDir, 'tests', 'specs');
 const staticIndex = path.join(rootDir, 'scripts', 'test-launcher', 'index.html');
 const staticAppJs = path.join(rootDir, 'scripts', 'test-launcher', 'app.js');
+const staticReadme = path.join(rootDir, 'scripts', 'test-launcher', 'README.md');
+const rootReadme = path.join(rootDir, 'README.md');
 const reportDir = path.join(rootDir, 'playwright-report');
 const testResultsDir = path.join(rootDir, 'test-results');
 
@@ -592,6 +594,20 @@ const server = createServer(async (req, res) => {
       const js = await readFile(staticAppJs, 'utf8');
       res.writeHead(200, { 'content-type': 'application/javascript; charset=utf-8' });
       res.end(js);
+      return;
+    }
+
+    if (req.method === 'GET' && url.pathname === '/launcher-readme') {
+      const md = await readFile(staticReadme, 'utf8');
+      res.writeHead(200, { 'content-type': 'text/markdown; charset=utf-8' });
+      res.end(md);
+      return;
+    }
+
+    if (req.method === 'GET' && url.pathname === '/repo-readme') {
+      const md = await readFile(rootReadme, 'utf8');
+      res.writeHead(200, { 'content-type': 'text/markdown; charset=utf-8' });
+      res.end(md);
       return;
     }
 
