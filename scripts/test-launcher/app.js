@@ -15,7 +15,6 @@ const dom = {
   selectAllSpecsBtn: document.getElementById('selectAllSpecsBtn'),
   deselectAllSpecsBtn: document.getElementById('deselectAllSpecsBtn'),
   runSelectedSuiteBtn: document.getElementById('runSelectedSuiteBtn'),
-  specSyncBadge: document.getElementById('specSyncBadge'),
   globalSpecList: document.getElementById('globalSpecList'),
   globalActionGrid: document.getElementById('globalActionGrid'),
   videoBtn: document.getElementById('videoBtn'),
@@ -34,8 +33,6 @@ const state = {
   batchRunning: false,
   running: false,
   run: null,
-  pendingSpecsUpdate: null,
-  pollTimer: null,
   selectedSpecs: new Set()
 };
 
@@ -74,7 +71,6 @@ Open: http://127.0.0.1:4173
 - Global spec selection with batch command execution
 - Suite run mode for consolidated HTML report
 - Per-test artifact viewing
-- Dynamic spec auto-refresh when test files are added/removed
 - Run history timeline`;
 
 const api = {
@@ -131,40 +127,8 @@ function setStatus(status) {
   }
 
   setRerunButtonState();
-  flushPendingSpecsUpdateIfIdle();
   renderGlobalSpecCart();
   renderSpecCards();
-}
-
-function areSameStringArrays(a, b) {
-  if (a.length !== b.length) return false;
-  for (let i = 0; i < a.length; i++) {
-    if (a[i] !== b[i]) return false;
-  }
-  return true;
-}
-
-function setSpecSyncBadge(text = '') {
-  if (!dom.specSyncBadge) return;
-  dom.specSyncBadge.textContent = text;
-}
-
-function applySpecsUpdate(nextSpecs) {
-  const prevSelected = new Set(state.selectedSpecs);
-  state.specs = nextSpecs;
-  state.selectedSpecs = new Set([...prevSelected].filter((spec) => state.specs.includes(spec)));
-  renderGlobalSpecCart();
-  renderSpecCards();
-}
-
-function flushPendingSpecsUpdateIfIdle() {
-  if (isBusy() || !state.pendingSpecsUpdate) return;
-  applySpecsUpdate(state.pendingSpecsUpdate.specs);
-  state.pendingSpecsUpdate = null;
-  setSpecSyncBadge('Updated');
-  setTimeout(() => {
-    setSpecSyncBadge('');
-  }, 3000);
 }
 
 function setHistory(data) {
@@ -510,28 +474,6 @@ function bindRealtimeEvents() {
   events.addEventListener('log', (ev) => appendLog(JSON.parse(ev.data)));
 }
 
-async function pollSpecs() {
-  try {
-    const specsData = await api.get('/api/specs');
-    const nextSpecs = specsData.specs || [];
-    if (areSameStringArrays(state.specs, nextSpecs)) return;
-
-    if (isBusy()) {
-      state.pendingSpecsUpdate = { specs: nextSpecs };
-      setSpecSyncBadge('Update queued');
-      return;
-    }
-
-    applySpecsUpdate(nextSpecs);
-    setSpecSyncBadge('Updated');
-    setTimeout(() => {
-      setSpecSyncBadge('');
-    }, 3000);
-  } catch {
-    // Silent by design; polling should not disrupt demos/runs.
-  }
-}
-
 async function init() {
   const [specsData, statusData, logsData, historyData] = await Promise.all([
     api.get('/api/specs'),
@@ -552,6 +494,9 @@ async function init() {
   }
   dom.projectSelect.value = specsData.defaultProject || 'chromium';
 
+  // Initial default: all specs selected. Deselect All remains respected afterward.
+  for (const spec of state.specs) state.selectedSpecs.add(spec);
+
   setStatus(statusData);
   setHistory(historyData);
 
@@ -560,11 +505,6 @@ async function init() {
   bindToolbarActions();
   bindMenuActions();
   bindRealtimeEvents();
-
-  // Watch for added/removed spec files and refresh lists without page reload.
-  state.pollTimer = setInterval(() => {
-    pollSpecs();
-  }, 8000);
 }
 
 init().catch((err) => {
