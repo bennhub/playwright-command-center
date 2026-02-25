@@ -93,3 +93,14 @@ Override with env vars when needed:
 ```bash
 BASE_URL="https://parabank.parasoft.com/parabank/index.htm" npx playwright test
 ```
+
+## Prompt Engineering Skills
+This repo includes prompt templates that showcase structured AI guidance for test strategy and automation design:
+
+- `skill/e2e-migration-coordinator.md`
+- `skill/codebase-analyzer.md`
+- `skill/user-flow-analyst.md`
+
+GitHub Actions trigger example for these files:
+
+- `.github/workflows/skill-prompts.yml`

@@ -1,0 +1,31 @@
+name: Skill Prompts Check
+
+on:
+  push:
+    branches:
+      - main
+      - master
+    paths:
+      - "skill/**"
+      - ".github/workflows/skill-prompts.yml"
+  pull_request:
+    paths:
+      - "skill/**"
+      - ".github/workflows/skill-prompts.yml"
+  workflow_dispatch:
+
+jobs:
+  validate-skill-files:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Verify skill files exist
+        run: |
+          test -f skill/e2e-migration-coordinator.md
+          test -f skill/codebase-analyzer.md
+          test -f skill/user-flow-analyst.md
+
+      - name: Show skill folder contents
+        run: ls -la skill
