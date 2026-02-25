@@ -1,4 +1,4 @@
-# Main Codebase Analyzer
+# Codebase Analyzer
 
 ## Purpose
 Evaluate a test automation codebase and produce a prioritized blueprint for improving structure, reliability, and long-term maintainability.
