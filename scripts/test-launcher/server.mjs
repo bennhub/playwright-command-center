@@ -6,8 +6,8 @@ import { existsSync } from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
 
-const HOST = process.env.LAUNCHER_HOST || '0.0.0.0';
-const PORT = Number(process.env.PORT || process.env.LAUNCHER_PORT || 4173);
+const HOST = process.env.LAUNCHER_HOST || '127.0.0.1';
+const PORT = Number(process.env.LAUNCHER_PORT || 4173);
 const PROJECTS = ['chromium', 'mobile-chrome'];
 const COMMAND_PRESETS = [
   {
@@ -83,20 +83,17 @@ let runHistory = [];
 let nextHistoryId = 1;
 const clients = new Set();
 
-function applyCors(res) {
-  res.setHeader('access-control-allow-origin', '*');
-  res.setHeader('access-control-allow-methods', 'GET, POST, OPTIONS');
-  res.setHeader('access-control-allow-headers', 'content-type');
-}
-
 function sendJson(res, code, payload) {
-  applyCors(res);
   res.writeHead(code, { 'content-type': 'application/json; charset=utf-8' });
   res.end(JSON.stringify(payload));
 }
 
 function sendJsonWithCors(res, code, payload) {
-  sendJson(res, code, payload);
+  res.writeHead(code, {
+    'content-type': 'application/json; charset=utf-8',
+    'access-control-allow-origin': '*'
+  });
+  res.end(JSON.stringify(payload));
 }
 
 function sendEvent(event, data) {
@@ -586,13 +583,6 @@ const server = createServer(async (req, res) => {
   try {
     const url = new URL(req.url || '/', `http://${req.headers.host || `${HOST}:${PORT}`}`);
 
-    if (req.method === 'OPTIONS') {
-      applyCors(res);
-      res.writeHead(204);
-      res.end();
-      return;
-    }
-
     if (req.method === 'GET' && url.pathname === '/') {
       const html = await readFile(staticIndex, 'utf8');
       res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
@@ -607,16 +597,8 @@ const server = createServer(async (req, res) => {
       return;
     }
 
-    if (req.method === 'GET' && url.pathname === '/config.js') {
-      const js = await readFile(path.join(rootDir, 'scripts', 'test-launcher', 'config.js'), 'utf8');
-      res.writeHead(200, { 'content-type': 'application/javascript; charset=utf-8' });
-      res.end(js);
-      return;
-    }
-
     if (req.method === 'GET' && url.pathname === '/launcher-readme') {
       const md = await readFile(staticReadme, 'utf8');
-      applyCors(res);
       res.writeHead(200, { 'content-type': 'text/markdown; charset=utf-8' });
       res.end(md);
       return;
@@ -624,7 +606,6 @@ const server = createServer(async (req, res) => {
 
     if (req.method === 'GET' && url.pathname === '/repo-readme') {
       const md = await readFile(rootReadme, 'utf8');
-      applyCors(res);
       res.writeHead(200, { 'content-type': 'text/markdown; charset=utf-8' });
       res.end(md);
       return;
@@ -684,7 +665,6 @@ const server = createServer(async (req, res) => {
     }
 
     if (req.method === 'GET' && url.pathname === '/api/stream') {
-      applyCors(res);
       res.writeHead(200, {
         'content-type': 'text/event-stream',
         'cache-control': 'no-cache',
@@ -801,7 +781,6 @@ const server = createServer(async (req, res) => {
         return;
       }
       const body = await readFile(latestVideo);
-      applyCors(res);
       res.writeHead(200, { 'content-type': 'video/webm' });
       res.end(body);
       return;
@@ -815,9 +794,9 @@ const server = createServer(async (req, res) => {
         return;
       }
       const body = await readFile(latestVideo);
-      applyCors(res);
       res.writeHead(200, {
-        'content-type': 'video/webm'
+        'content-type': 'video/webm',
+        'access-control-allow-origin': '*'
       });
       res.end(body);
       return;
@@ -831,10 +810,10 @@ const server = createServer(async (req, res) => {
         return;
       }
       const body = await readFile(latestTrace);
-      applyCors(res);
       res.writeHead(200, {
         'content-type': 'application/zip',
-        'content-disposition': `inline; filename=\"${path.basename(latestTrace)}\"`
+        'content-disposition': `inline; filename=\"${path.basename(latestTrace)}\"`,
+        'access-control-allow-origin': '*'
       });
       res.end(body);
       return;
@@ -859,5 +838,5 @@ const server = createServer(async (req, res) => {
 });
 
 server.listen(PORT, HOST, () => {
-  console.log(`Playwright Command Center running at http://${HOST}:${PORT}`);
+  console.log(`Playwright Debug Launcher running at http://${HOST}:${PORT}`);
 });

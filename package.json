@@ -1,10 +1,9 @@
 {
-  "name": "playwright-command-center",
+  "name": "parabank-automation-showcase",
   "version": "1.0.0",
-  "description": "Playwright command center and automation showcase",
+  "description": "Playwright automation showcase for Parabank",
   "main": "index.js",
   "scripts": {
-    "start": "node scripts/test-launcher/server.mjs",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "test:e2e:headed": "playwright test --headed --project=chromium",
