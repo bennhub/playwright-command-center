@@ -1,6 +1,8 @@
-# Parabank Automation Showcase
+# Playwright Command Center
 
-Playwright-based automation framework for a banking-style application (`parabank.parasoft.com`) designed for technical interview demonstration.
+Playwright-based command center and automation showcase for technical demos, interview walkthroughs, and portfolio embedding.
+
+This repo still uses a Parabank test target for the example suite, but the launcher UI and project branding are intentionally generic so the command center can stand on its own.
 
 ## Framework Structure
 - `tests/specs/` - end-to-end scenarios
@@ -43,7 +45,7 @@ npx playwright test --headed --project=chromium
 npx playwright show-report
 ```
 
-## Optional Command Center
+## Command Center
 `scripts/command-center.mjs` provides a lightweight terminal dashboard that runs grouped suites in parallel with `chromium` + `mobile-chrome` by default and writes worker logs to `test-results/*.log`.
 
 ```bash
@@ -70,6 +72,47 @@ CC_PROJECTS=chromium,mobile-chrome CC_RETRIES=1 npm run test:e2e:dashboard
 npm run test:e2e:launcher
 # Opens at http://127.0.0.1:4173
 ```
+
+## Cloudflare Pages Frontend
+The launcher frontend is now prepared to be hosted as a static site on Cloudflare Pages.
+
+Important constraint:
+- the current backend in `scripts/test-launcher/server.mjs` uses Node `child_process` to run Playwright, so it is not deployable to Cloudflare Pages as-is
+
+Recommended model:
+1. Host the frontend from `scripts/test-launcher/` on Cloudflare Pages
+2. Host the backend on a Node-friendly platform
+3. Set the frontend API base in `scripts/test-launcher/config.js`
+
+Example:
+
+```js
+window.__PWCC_CONFIG__ = {
+  API_BASE: "https://your-command-center-api.example.com"
+};
+```
+
+## Railway Deployment
+The current repo is also prepared for Railway, which is the easier option if you want to host the full launcher and backend together without a rewrite.
+
+Files added for that:
+
+- `Dockerfile`
+- `railway.json`
+- `.dockerignore`
+
+Expected flow:
+
+1. Create a new Railway project from this repo
+2. Railway builds from `Dockerfile`
+3. The app starts with `npm start`
+4. Railway injects `PORT`, which the launcher now respects automatically
+
+Notes:
+
+- The server now binds to `0.0.0.0`
+- The app reads `PORT` first, then falls back to `LAUNCHER_PORT`, then `4173`
+- Because the image uses the Playwright base image, Chromium and related runtime deps are already available
 
 ## Network Wait Strategy (Interview Notes)
 - We add `page.waitForResponse(...)` at transaction boundaries (register/open account/transfer/bill pay).

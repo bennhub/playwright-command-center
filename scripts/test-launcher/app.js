@@ -25,6 +25,13 @@ const dom = {
   logEl: document.getElementById('log')
 };
 
+const config = window.__PWCC_CONFIG__ || {};
+const API_BASE = String(config.API_BASE || '').replace(/\/$/, '');
+
+function apiUrl(path) {
+  return `${API_BASE}${path}`;
+}
+
 const state = {
   specs: [],
   presets: [],
@@ -38,10 +45,10 @@ const state = {
   selectedSpecs: new Set()
 };
 
-const README_FALLBACK = `# Parabank Automation Showcase
+const README_FALLBACK = `# Playwright Command Center
 
 ## What This App Is
-Ben's Playwright Command Runner + Debugger for interview demos and fast troubleshooting.
+Ben's Playwright command runner and debugger for interview demos and fast troubleshooting.
 
 ## Mission
 - Reduce CLI friction for running tests
@@ -61,6 +68,9 @@ npm run test:e2e:launcher
 
 Open: http://127.0.0.1:4173
 
+## Hosted Frontend
+To host the UI on Cloudflare Pages, set \`window.__PWCC_CONFIG__.API_BASE\` in \`config.js\` to your deployed backend URL.
+
 ## Typical Workflow
 1. Pick Target (Browser/Device)
 2. Select specs in Global Spec Cart
@@ -78,14 +88,14 @@ Open: http://127.0.0.1:4173
 
 const api = {
   async get(path) {
-    const res = await fetch(path);
+    const res = await fetch(apiUrl(path));
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || `Request failed: ${path}`);
     return data;
   },
 
   async post(path, body) {
-    const res = await fetch(path, {
+    const res = await fetch(apiUrl(path), {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: body ? JSON.stringify(body) : undefined
@@ -337,10 +347,10 @@ async function openLatestArtifact(spec, type) {
       return;
     }
     if (type === 'trace') {
-      window.open(`/trace/view?spec=${encodeURIComponent(spec)}`, '_blank', 'noopener,noreferrer');
+      window.open(apiUrl(`/trace/view?spec=${encodeURIComponent(spec)}`), '_blank', 'noopener,noreferrer');
       return;
     }
-    window.open(`/artifact/latest/${type}?spec=${encodeURIComponent(spec)}`, '_blank', 'noopener,noreferrer');
+    window.open(apiUrl(`/artifact/latest/${type}?spec=${encodeURIComponent(spec)}`), '_blank', 'noopener,noreferrer');
   } catch (err) {
     alert(err.message || 'Failed to open artifact.');
   }
@@ -386,7 +396,7 @@ function bindToolbarActions() {
   });
 
   dom.exportHtmlBtn.addEventListener('click', () => {
-    window.open('/api/export/history.html', '_blank', 'noopener,noreferrer');
+    window.open(apiUrl('/api/export/history.html'), '_blank', 'noopener,noreferrer');
   });
 
   dom.reportBtn.addEventListener('click', async () => {
@@ -396,7 +406,7 @@ function bindToolbarActions() {
         alert('No HTML report found yet. Run Reporter HTML for a test first.');
         return;
       }
-      window.open('/report/', '_blank', 'noopener,noreferrer');
+      window.open(apiUrl('/report/'), '_blank', 'noopener,noreferrer');
     } catch (err) {
       alert(err.message || 'Failed to open report.');
     }
@@ -409,7 +419,7 @@ function bindToolbarActions() {
         alert('No video found yet. Run Video On for a test first.');
         return;
       }
-      window.open('/video/latest', '_blank', 'noopener,noreferrer');
+      window.open(apiUrl('/video/latest'), '_blank', 'noopener,noreferrer');
     } catch (err) {
       alert(err.message || 'Failed to open video.');
     }
@@ -456,7 +466,7 @@ function bindMenuActions() {
     closeMenu();
     openReadmeModal();
     dom.readmeCodeWindow.textContent = 'Loading README...';
-    fetch('/repo-readme')
+    fetch(apiUrl('/repo-readme'))
       .then((res) => {
         if (!res.ok) throw new Error('Could not load repository README.');
         return res.text();
@@ -501,7 +511,7 @@ function bindMenuActions() {
 }
 
 function bindRealtimeEvents() {
-  const events = new EventSource('/api/stream');
+  const events = new EventSource(apiUrl('/api/stream'));
   events.addEventListener('status', (ev) => setStatus(JSON.parse(ev.data)));
   events.addEventListener('history', (ev) => setHistory(JSON.parse(ev.data)));
   events.addEventListener('log', (ev) => appendLog(JSON.parse(ev.data)));
