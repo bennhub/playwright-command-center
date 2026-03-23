@@ -2,7 +2,7 @@
 
 Playwright-based automation framework for a banking-style application (`parabank.parasoft.com`) designed for technical interview demonstration.
 
-## Framework Structure
+## Framework Structures
 - `tests/specs/` - end-to-end scenarios
 - `tests/pages/` - page objects
 - `tests/fixtures/` - test fixtures
