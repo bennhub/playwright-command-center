@@ -1,7 +1,7 @@
-# Playwright Command Runner + Debugger
+# Playwright Command Center Launcher
 
 ## What This App Is
-A local web command center for running Playwright tests quickly during development and demo sessions.
+A local web command center for running Playwright tests quickly during development, debugging, and demo sessions.
 
 It combines:
 - command execution for selected specs

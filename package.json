@@ -1,7 +1,7 @@
 {
   "name": "parabank-automation-showcase",
   "version": "1.0.0",
-  "description": "Playwright automation showcase for Parabank",
+  "description": "Playwright automation framework and local command center for QA execution and debugging",
   "main": "index.js",
   "scripts": {
     "test:e2e": "playwright test",
